@@ -11,12 +11,15 @@ const {
   getExtensionIdFirefox,
 } = require('../func')
 const {
+  checkBrowserForConsoleErrors,
+  closeAllWindowHandlesExceptFirst,
   findElement,
   findElements,
-  checkBrowserForConsoleErrors,
   loadExtension,
-  verboseReportOnFailure,
   openNewPage,
+  switchToWindowWithTitle,
+  verboseReportOnFailure,
+  waitUntilXWindowHandles,
 } = require('./helpers')
 
 describe('MetaMask', function () {
@@ -422,16 +425,15 @@ describe('MetaMask', function () {
       await openNewPage(driver, 'https://eth-faucet-licnvruull.now.sh/')
       await delay(regularDelayMs)
 
-      let windowHandles = await driver.getAllWindowHandles()
-      await driver.switchTo().window(windowHandles[windowHandles.length - 1])
+      await waitUntilXWindowHandles(driver, 3)
+      let [extension, faucet, popup] = await driver.getAllWindowHandles()
+      await driver.switchTo().window(popup)
       const approve = await findElement(driver, By.css('.btn-primary'))
       await approve.click()
       await delay(regularDelayMs)
-      windowHandles = await driver.getAllWindowHandles()
-      await driver.switchTo().window(windowHandles[windowHandles.length - 1])
 
-      const [extension, faucet] = await driver.getAllWindowHandles()
       await driver.switchTo().window(faucet)
+      await delay(regularDelayMs)
 
       const faucetPageTitle = await findElement(driver, By.css('.container-fluid'))
       await driver.wait(until.elementTextMatches(faucetPageTitle, /MetaMask/))
@@ -449,13 +451,8 @@ describe('MetaMask', function () {
       await confirmButton.click()
       await delay(regularDelayMs)
 
-      await driver.switchTo().window(faucet)
-      await delay(regularDelayMs)
-      await driver.close()
-      await delay(regularDelayMs)
+      await closeAllWindowHandlesExceptFirst()
       await driver.switchTo().window(extension)
-      await delay(regularDelayMs)
-      await loadExtension(driver, extensionId)
       await delay(regularDelayMs)
     })
   })
@@ -463,19 +460,20 @@ describe('MetaMask', function () {
   describe('Deploy contract and call contract methods', () => {
     let extension
     let contractTestPage
+    let popup
     it('confirms a deploy contract transaction', async () => {
       await openNewPage(driver, 'http://127.0.0.1:8080/')
       await delay(3000)
 
-      let windowHandles = await driver.getAllWindowHandles()
-      await driver.switchTo().window(windowHandles[windowHandles.length - 2])
+      await waitUntilXWindowHandles(driver, 3);
+      [extension, contractTestPage, popup] = await driver.getAllWindowHandles()
+
+      await driver.switchTo().window(popup)
       const approve = await findElement(driver, By.css('.btn-primary'))
       await approve.click()
       await delay(regularDelayMs)
-      windowHandles = await driver.getAllWindowHandles()
-      await driver.switchTo().window(windowHandles[windowHandles.length - 1]);
 
-      [extension, contractTestPage] = await driver.getAllWindowHandles()
+      await driver.switchTo().window(contractTestPage)
       await delay(regularDelayMs)
 
       const deployContractButton = await findElement(driver, By.css('#deployButton'))
@@ -485,9 +483,9 @@ describe('MetaMask', function () {
       await driver.switchTo().window(extension)
       await delay(regularDelayMs)
 
-      const txListItem = await findElement(driver, By.css('.tx-list-item'))
+      const txListItem = await findElement(driver, By.xpath(`//span[contains(text(), 'Contract Deployment')]`))
       await txListItem.click()
-      await delay(5000)
+      await delay(regularDelayMs)
 
       const confirmButton = await findElement(driver, By.xpath(`//button[contains(text(), 'Confirm')]`))
       await confirmButton.click()
@@ -575,8 +573,7 @@ describe('MetaMask', function () {
       const txValues = await findElement(driver, By.css('.tx-list-value'))
       await driver.wait(until.elementTextMatches(txValues, /0\sETH/), 10000)
 
-      await driver.switchTo().window(contractTestPage)
-      await driver.close()
+      await closeAllWindowHandlesExceptFirst()
       await driver.switchTo().window(extension)
     })
 
@@ -595,8 +592,10 @@ describe('MetaMask', function () {
       openNewPage(driver, 'https://token-factory-akfgedomci.now.sh/#/factory')
       await delay(3000)
 
+      await waitUntilXWindowHandles(driver, 3)
       let windowHandles = await driver.getAllWindowHandles()
-      await driver.switchTo().window(windowHandles[windowHandles.length - 2])
+
+      await switchToWindowWithTitle(driver, 'MetaMask Notification', windowHandles)
       const approve = await findElement(driver, By.css('.btn-primary'))
       await approve.click()
       await delay(regularDelayMs)

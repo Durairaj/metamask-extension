@@ -6,11 +6,14 @@ const { delay } = require('../func')
 
 module.exports = {
   checkBrowserForConsoleErrors,
-  loadExtension,
-  verboseReportOnFailure,
+  closeAllWindowHandlesExceptFirst,
   findElement,
   findElements,
+  loadExtension,
   openNewPage,
+  switchToWindowWithTitle,
+  verboseReportOnFailure,
+  waitUntilXWindowHandles,
 }
 
 async function loadExtension (driver, extensionId) {
@@ -72,9 +75,48 @@ async function openNewPage (driver, url) {
   await delay(1000)
 
   const handles = await driver.getAllWindowHandles()
-  const secondHandle = handles[handles.length - 1]
-  await driver.switchTo().window(secondHandle)
+  const lastHandle = handles[handles.length - 1]
+  await driver.switchTo().window(lastHandle)
 
   await driver.get(url)
   await delay(1000)
+}
+
+async function waitUntilXWindowHandles (driver, x) {
+  let windowHandles = await driver.getAllWindowHandles()
+  if (windowHandles.length === x) return
+  await delay(1000)
+  return await waitUntilXWindowHandles(driver, x)
+}
+
+async function switchToWindowWithTitle (driver, title, windowHandles) {
+  if (!windowHandles) {
+    windowHandles = await driver.getAllWindowHandles()
+  } else if (windowHandles.length === 0) {
+    throw new Error('No window with title: ' + title)
+  }
+  const firstHandle = windowHandles[0]
+  await driver.switchTo().window(firstHandle)
+  const handleTitle = await driver.getTitle()
+
+  if (handleTitle === title) {
+    return
+  } else {
+    return await switchToWindowWithTitle(driver, title, windowHandles.slice(1))
+  }
+}
+
+async function closeAllWindowHandlesExceptFirst (windowHandles = []) {
+  if (windowHandles.length > 1) {
+    const lastWindowHandle = windowHandles[windowHandles.length - 1]
+    await driver.switchTo().window(lastWindowHandle)
+    await delay(regularDelayMs)
+    await driver.close()
+    return await closeAllWindowHandlesExceptFirst(windowHandles.slice(0, windowHandles.length - 1))
+  } else if (windowHandles.length === 0) {
+    windowHandles = await driver.getAllWindowHandles()
+    return closeAllWindowHandlesExceptFirst(windowHandles)
+  } else if (windowHandles.length === 1) {
+    return
+  }
 }
